@@ -9,7 +9,11 @@ import (
 	"sync"
 )
 
-var clients = map[net.Conn]string{}
+type Client struct {
+	Name string
+	Room string
+}
+var clients = map[net.Conn]*Client{}
 
 func main() {
 	mtx := sync.Mutex{}
@@ -57,7 +61,21 @@ func newConnection(conn net.Conn, mtx *sync.Mutex) {
 		if err != nil {
 			break
 		}
-
+		message = strings.TrimSpace(message) //bersihkan space di awal dan akhir kalimat
+		if strings.HasPrefix(message, "/join "){ //jika message yang dimasukkan berawalan "/join"
+			room := strings.TrimPrefix(message, "/join")
+			mtx.Lock()
+			clients[conn].Room = room //masukkan client ke room sesuai dengan room yg diketik
+			mtx.Unlock()
+			fmt.Fprintf(conn, "Kamu berhasil masuk ke room: %s\n", room)
+			continue
+		} else if message == "/exit"{ //jika message yang dimasukkan adalah "/exit"
+			mtx.Lock()
+			clients[conn].Room = "general" //kembalikan client ke room general (room utama)
+			mtx.Unlock()
+			fmt.Fprintf(conn, "Kamu berhasil kembali ke room utama\n")
+			continue
+		}
 		broadcastMessage(conn, message, mtx)
 	}
 
@@ -71,11 +89,15 @@ func newConnection(conn net.Conn, mtx *sync.Mutex) {
 // function for broadcasting a clients message to another clients
 func broadcastMessage(conn net.Conn, message string, mtx *sync.Mutex) {
 	mtx.Lock()
-	for client := range clients {
+	roomPengirim := clients[conn].Room
+
+	for client, peopleInRoom := range clients {
 		if client == conn { // wont send message to itself
 			continue
-		} else {
-			fmt.Fprintf(client, "%s	: %s", clients[conn], message)
+		} 
+		
+		if peopleInRoom.Room == roomPengirim {
+			fmt.Fprintf(client, "%s	: %s\n", clients[conn].Name, message)
 		}
 	}
 	mtx.Unlock()
@@ -88,7 +110,7 @@ func broadcastLog(conn net.Conn, log string, mtx *sync.Mutex) {
 		if client == conn { // wont send message to itself
 			continue
 		} else {
-			fmt.Fprintf(client, "%s %s\n", clients[conn], log)
+			fmt.Fprintf(client, "%s %s\n", clients[conn].Name, log)
 		}
 	}
 	mtx.Unlock()
@@ -96,14 +118,18 @@ func broadcastLog(conn net.Conn, log string, mtx *sync.Mutex) {
 
 func checkUsername(conn net.Conn, username string, mtx *sync.Mutex) bool {
 	mtx.Lock()
-	for _, name := range clients {
-		if username == name {
+	for _, user := range clients {
+		if username == user.Name {
 			mtx.Unlock()
 			return false
 		}
 	}
 	// use mutex so that when 2 clients connected, the clients wont be accessed in the same time
-	clients[conn] = username
+	// clients[conn] = username
+	clients[conn] = &Client{
+		Name: username,
+		Room: "general", 
+	}
 
 	mtx.Unlock()
 	return true
