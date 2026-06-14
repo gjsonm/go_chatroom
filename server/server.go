@@ -56,6 +56,7 @@ func newConnection(conn net.Conn, mtx *sync.Mutex) {
 		return
 	}
 
+	//tolak username kalo udah ada
 	if !checkUsername(conn, name, mtx) {
 		fmt.Fprintf(conn, "Username already exists\n")
 		conn.Close()
@@ -64,6 +65,7 @@ func newConnection(conn net.Conn, mtx *sync.Mutex) {
 
 	// kasih tau semua orang kalo ada user baru masuk server
 	broadcastGlobal(conn, fmt.Sprintf("[SERVER] %s has joined", name), mtx)
+
 	// kasih tau room general kalo user masuk
 	broadcastRoom(conn, "general", fmt.Sprintf("[ROOM general] %s has joined the room", name), mtx)
 
@@ -73,6 +75,7 @@ func newConnection(conn net.Conn, mtx *sync.Mutex) {
 	fmt.Fprintf(conn, "Untuk lihat room aktif: /rooms\n")
 	fmt.Fprintf(conn, "Untuk lihat list command: /help\n")
 
+	
 	for {
 		message, err := reader.ReadString('\n')
 		if err != nil {
