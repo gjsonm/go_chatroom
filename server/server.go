@@ -9,11 +9,13 @@ import (
 	"sync"
 )
 
+//Tipe Data yang digunakan untuk menyimpan informasi Nama user dan Nama Ruangan Saat ini
 type Client struct {
 	Name string
 	Room string
 }
 
+//Varibel yang menyimpan seluruh client yang lagi aktif di server (Terhubung)
 var clients = map[net.Conn]*Client{}
 
 func main() {
@@ -25,7 +27,9 @@ func main() {
 		fmt.Println("Listening port :9090")
 	}
 
+	//Loop utama server, Loop terus dijalankan agar bisa atau menunggu koneksi baru (koneksi disini teh koneksi client ke server)
 	for {
+		//Variabel yang menerima ketika ada koneksi baru
 		conn, err := ln.Accept()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to accept connection")
@@ -33,14 +37,17 @@ func main() {
 			fmt.Println("New connection accepted")
 		}
 
+		//Memmbuat koneksi baru bisa dijalankan secara pararel
 		go newConnection(conn, &mtx)
 	}
 }
 
+//Function yang mengurus atau menangani User
 func newConnection(conn net.Conn, mtx *sync.Mutex) {
+	//Variabel buat ngebaca input komunikasi
 	reader := bufio.NewReader(conn)
 
-	// detect the clients identity and add it to map
+	// Variabel yang membaca input user (Bagian username)
 	name, err := reader.ReadString('\n')
 
 	if err != nil {
@@ -66,24 +73,30 @@ func newConnection(conn net.Conn, mtx *sync.Mutex) {
 	// kasih tau semua orang kalo ada user baru masuk server
 	broadcastGlobal(conn, fmt.Sprintf("[SERVER] %s has joined", name), mtx)
 
-	// kasih tau room general kalo user masuk
+	// kasih tau room general kalo ada user baru masuk
 	broadcastRoom(conn, "general", fmt.Sprintf("[ROOM general] %s has joined the room", name), mtx)
 
 	// tampilin list command ke client yang baru join
+	// "/join Buat masuk room"
+	// "/Exit buat keluar dari room dan kembali ke general"
+	// "/Rooms buat ada room apa aja yang aktif (tersedia)"
+	// "/Help buat ngeliatin ada command apa aja dan gunannya buat apa"
 	fmt.Fprintf(conn, "Untuk masuk ke room: /join <namaroom>\n")
 	fmt.Fprintf(conn, "Untuk balik ke general: /exit\n")
 	fmt.Fprintf(conn, "Untuk lihat room aktif: /rooms\n")
 	fmt.Fprintf(conn, "Untuk lihat list command: /help\n")
 
-	
+	//Loop yang digunakan untuk membaca setiap input (ketikan) yang dilakukan user 
 	for {
 		message, err := reader.ReadString('\n')
+		//if ini kalo tb tb kalian client/user terputus dari server 
 		if err != nil {
 			break
 		}
+
 		message = strings.TrimSpace(message) //bersihkan space di awal dan akhir kalimat
 
-		if strings.HasPrefix(message, "/join") { //jika message yang dimasukkan berawalan "/join"
+		if strings.HasPrefix(message, "/join") { //jika message yang dimasukkan berupa perintah buat join room
 			// ambil nama room dari command
 			room := strings.TrimSpace(strings.TrimPrefix(message, "/join"))
 
@@ -92,6 +105,7 @@ func newConnection(conn net.Conn, mtx *sync.Mutex) {
 				fmt.Fprintf(conn, "Nama room tidak boleh kosong. Gunakan: /join <namaroom>\n")
 				continue
 			}
+
 
 			mtx.Lock()
 			oldRoom := clients[conn].Room
@@ -105,7 +119,8 @@ func newConnection(conn net.Conn, mtx *sync.Mutex) {
 
 			fmt.Fprintf(conn, "Kamu berhasil masuk ke room: %s\n", room)
 			continue
-		} else if message == "/exit" { //jika message yang dimasukkan adalah "/exit"
+			
+		} else if message == "/exit" { //jika message yang dimasukkan berupa perintah keluar dari room saat ini
 			mtx.Lock()
 			oldRoom := clients[conn].Room
 			clients[conn].Room = "general" //kembalikan client ke room general (room utama)
@@ -118,11 +133,13 @@ func newConnection(conn net.Conn, mtx *sync.Mutex) {
 
 			fmt.Fprintf(conn, "Kamu berhasil kembali ke room utama\n")
 			continue
-		} else if message == "/rooms" {
+
+		} else if message == "/rooms" { //Jika message yang dimasukan berupa perintah "Melihat room yang aktif"
 			// tampilin daftar room yang aktif
 			listRooms(conn, mtx)
 			continue
-		} else if message == "/help" {
+
+		} else if message == "/help" {//Jika message yang dimasukan berupa perintah yang menunjukan list command yg tersedia
 			// tampilin list command
 			fmt.Fprintf(conn, "Untuk masuk ke room: /join <namaroom>\n")
 			fmt.Fprintf(conn, "Untuk balik ke general: /exit\n")
@@ -131,6 +148,7 @@ func newConnection(conn net.Conn, mtx *sync.Mutex) {
 			continue
 		}
 
+		//Kalo perintah yang diberikan selain ke 4 itu, nanti bakal dikasih tau 
 		broadcastMessage(conn, message, mtx)
 	}
 
@@ -141,21 +159,23 @@ func newConnection(conn net.Conn, mtx *sync.Mutex) {
 	broadcastGlobal(conn, fmt.Sprintf("[SERVER] %s has left", userName), mtx)
 
 	mtx.Lock()
-	delete(clients, conn) // remove client from client list
+	delete(clients, conn) // Hapus Client atau user dari daftar user aktif (map)
 	mtx.Unlock()
-	conn.Close() // close this clients connection
+	conn.Close() // Tutup atau hapus koneksi user
 }
 
-// function for broadcasting a clients message to another clients in the same room
+// function untuk broadcasting pesan chat dari suatu user ke semua user yang ada didalam room
 func broadcastMessage(conn net.Conn, message string, mtx *sync.Mutex) {
 	mtx.Lock()
 	roomPengirim := clients[conn].Room
 
+	//Loop buat ngelakuin iterasi sebanyak user aktif yang yang ada di room tersebut
 	for client, peopleInRoom := range clients {
 		if client == conn { // wont send message to itself
 			continue
 		}
 
+		//Kalo user tersebut ada didalam room yang sama dengan pengirim broadcast, kirim pesannya
 		if peopleInRoom.Room == roomPengirim {
 			fmt.Fprintf(client, "%s\t: %s\n", clients[conn].Name, message)
 		}
@@ -163,7 +183,7 @@ func broadcastMessage(conn net.Conn, message string, mtx *sync.Mutex) {
 	mtx.Unlock()
 }
 
-// broadcast ke semua client (join/leave server)
+// broadcast ke semua client kalo ada client yang join atau leave (join/leave server)
 func broadcastGlobal(conn net.Conn, msg string, mtx *sync.Mutex) {
 	mtx.Lock()
 	for client := range clients {
