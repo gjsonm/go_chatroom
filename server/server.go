@@ -183,7 +183,7 @@ func broadcastMessage(conn net.Conn, message string, mtx *sync.Mutex) {
 	mtx.Unlock()
 }
 
-// broadcast ke semua client kalo ada client yang join atau leave (join/leave server)
+// Function yang mengurus broadcast ke semua client kalo ada client yang join atau leave (join/leave server)
 func broadcastGlobal(conn net.Conn, msg string, mtx *sync.Mutex) {
 	mtx.Lock()
 	for client := range clients {
@@ -195,7 +195,7 @@ func broadcastGlobal(conn net.Conn, msg string, mtx *sync.Mutex) {
 	mtx.Unlock()
 }
 
-// broadcast ke client di room tertentu aja (join/leave room)
+// Function yang mengurus broadcast ke client di room tertentu aja (join/leave room)
 func broadcastRoom(sender net.Conn, room string, msg string, mtx *sync.Mutex) {
 	mtx.Lock()
 	for client, info := range clients {
@@ -209,7 +209,7 @@ func broadcastRoom(sender net.Conn, room string, msg string, mtx *sync.Mutex) {
 	mtx.Unlock()
 }
 
-// tampilin daftar room yang lagi aktif (minimal 1 orang di dalamnya)
+// Function yang mengurus tampilin daftar room yang lagi aktif (minimal 1 orang di dalamnya)
 func listRooms(conn net.Conn, mtx *sync.Mutex) {
 	mtx.Lock()
 	roomSet := map[string]int{}
@@ -224,20 +224,22 @@ func listRooms(conn net.Conn, mtx *sync.Mutex) {
 	}
 }
 
+//Function yang mengurus validasi dari username yang akan digunakan user. Validasi berupa (sudah dipakai user lain atau belum)
 func checkUsername(conn net.Conn, username string, mtx *sync.Mutex) bool {
 	mtx.Lock()
 	for _, user := range clients {
+		//Kondisi dimana jika terdapat nama yang sama
 		if username == user.Name {
 			mtx.Unlock()
 			return false
 		}
 	}
-	// use mutex so that when 2 clients connected, the clients wont be accessed in the same time
+	// Masukin user baru ke map of clients dengan room awal yang dimasukin general (defaultnya)
 	clients[conn] = &Client{
 		Name: username,
 		Room: "general",
 	}
 
 	mtx.Unlock()
-	return true
+	return true //Berita tahu bahwa username telah berhasil didaftarkan
 }
